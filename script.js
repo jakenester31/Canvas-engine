@@ -12,7 +12,8 @@ for (let canvas of $$('canvas[workspace]')) {
     worker.postMessage({
         type:'initiate',
         width:canvas.clientWidth,
-        height:canvas.clientHeight
+        height:canvas.clientHeight,
+        dpr:devicePixelRatio
     })
 
     let bitmap;
@@ -22,28 +23,37 @@ for (let canvas of $$('canvas[workspace]')) {
         switch (data.type) {
             case 'draw':
                 bitmap = data.bitmap;
-                context.clearRect(0, 0, canvas.width, canvas.height);
+                // context.clearRect(0, 0, canvas.width, canvas.height);
                 context.drawImage(data.bitmap,0,0);
             break; default: 
                 console.warn(`No matching handler for type '${data.type}'`); 
         }
     }
 
-    new ResizeObserver(e => {
+    new ResizeObserver(_ => {
         if (canvas.clientWidth <= 0 || !isFinite(canvas.clientWidth)) return;
         if (canvas.clientHeight <= 0 || !isFinite(canvas.clientHeight)) return;
 
-        canvas.height = canvas.clientHeight;
-        canvas.width = canvas.clientWidth;
+        canvas.height = Math.ceil(canvas.clientHeight * devicePixelRatio);
+        canvas.width = Math.ceil(canvas.clientWidth * devicePixelRatio);
         if (bitmap)
             context.drawImage(bitmap,0,0);
 
         worker.postMessage({
             type:'resize_canvas',
+            height:canvas.height,
             width:canvas.width,
-            height:canvas.height
         })
     }).observe(canvas);
+
+    matchMedia(`(resolution: ${devicePixelRatio}dppx)`).addEventListener('change', _ => {
+        worker.postMessage({
+            type:'dpi',
+            dpr:devicePixelRatio
+        })
+    })
+
+
 }
 
 // 1:03

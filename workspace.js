@@ -5,12 +5,14 @@ onmessage = e => {
             initiate(data)
         break; case 'resize_canvas':
             resize_canvas(data);
+        break; case 'dpi':
+            dpr = data.dpr
         break; default:
             console.warn(`No matching handler for type '${data.type}'`); 
     }
 }
 
-function initiate({width,height}) {
+function initiate({width,height,dpr}) {
     self.canvas = new OffscreenCanvas(width,height);
     context = canvas.getContext('2d');
     transform = {
@@ -20,7 +22,7 @@ function initiate({width,height}) {
         apply() {
             context.resetTransform();
             context.translate(this.x,this.y);
-            context.scale(this.scale,this.scale);
+            context.scale(this.scale * dpr,this.scale * dpr);
             Object.assign(transform.cache,{
                 x: -transform.x / transform.scale,
                 y: -transform.y / transform.scale,
@@ -38,6 +40,8 @@ function initiate({width,height}) {
             obj.apply();
         }
     })
+
+    self.dpr = dpr
 
     mainLoop();
 }
@@ -69,10 +73,10 @@ var [mainLoop,step] = (() => {
 
         context.fillRect(20,600,1000,100);
 
-        const bitmap = canvas.transferToImageBitmap();
+
         postMessage({
             type:'draw',
-            bitmap
+            bitmap:canvas.transferToImageBitmap()
         })
 
         // loop
@@ -81,14 +85,8 @@ var [mainLoop,step] = (() => {
     }
 })();
 
-function resize_canvas({height,width,time}) {
-
-    // guard
-    if (width <= 0 || !isFinite(width)) return;
-    if (height <= 0 || !isFinite(height)) return;
-
+function resize_canvas({width,height}) {
     canvas.height = height;
     canvas.width = width;
-
     transform.apply();
 }

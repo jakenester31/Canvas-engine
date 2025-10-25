@@ -7,20 +7,24 @@ for (let canvas of $$('canvas[workspace]')) {
     const worker = new Worker('workspace.js');
     workspaces.set(canvas,worker);
 
-    const worker_canvas = canvas.transferControlToOffscreen();
+    const context = canvas.getContext('2d');
 
     worker.postMessage({
         type:'initiate',
-        canvas:worker_canvas
-    },[worker_canvas])
+        width:canvas.clientWidth,
+        height:canvas.clientHeight
+    })
 
-    worker.postMessage({type:'test'})
-
+    let bitmap;
     // listeners
     worker.onmessage = e => {
         const data = e.data;
         switch (data.type) {
-            default: 
+            case 'draw':
+                bitmap = data.bitmap;
+                context.clearRect(0, 0, canvas.width, canvas.height);
+                context.drawImage(data.bitmap,0,0);
+            break; default: 
                 console.warn(`No matching handler for type '${data.type}'`); 
         }
     }
@@ -29,10 +33,17 @@ for (let canvas of $$('canvas[workspace]')) {
         if (canvas.clientWidth <= 0 || !isFinite(canvas.clientWidth)) return;
         if (canvas.clientHeight <= 0 || !isFinite(canvas.clientHeight)) return;
 
+        canvas.height = canvas.clientHeight;
+        canvas.width = canvas.clientWidth;
+        if (bitmap)
+            context.drawImage(bitmap,0,0);
+
         worker.postMessage({
             type:'resize_canvas',
-            height:canvas.clientHeight,
-            width:canvas.clientWidth,
+            width:canvas.width,
+            height:canvas.height
         })
     }).observe(canvas);
 }
+
+// 1:03

@@ -5,15 +5,13 @@ onmessage = e => {
             initiate(data)
         break; case 'resize_canvas':
             resize_canvas(data);
-        break; case 'test':
-            transform.x = 100;
         break; default:
             console.warn(`No matching handler for type '${data.type}'`); 
     }
 }
 
-function initiate({canvas}) {
-    self.canvas = canvas;
+function initiate({width,height}) {
+    self.canvas = new OffscreenCanvas(width,height);
     context = canvas.getContext('2d');
     transform = {
         scale:1,
@@ -64,8 +62,18 @@ var [mainLoop,step] = (() => {
         context.strokeStyle = 'black';
         // draw
 
+        context.fillStyle='green';
         context.fillRect(50,50,50,50);
+        context.fillStyle='red';
         context.fillRect(50,200,100,100);
+
+        context.fillRect(20,600,1000,100);
+
+        const bitmap = canvas.transferToImageBitmap();
+        postMessage({
+            type:'draw',
+            bitmap
+        })
 
         // loop
         if (recursive)
@@ -78,6 +86,7 @@ function resize_canvas({height,width,time}) {
     // guard
     if (width <= 0 || !isFinite(width)) return;
     if (height <= 0 || !isFinite(height)) return;
+
     canvas.height = height;
     canvas.width = width;
 

@@ -5,17 +5,24 @@ const workspaces = new Map()
 for (let canvas of $$('canvas[workspace]')) {
     // setup
     const worker = new Worker('workspace.js');
-    const worker_canvas = canvas.transferControlToOffscreen();
     workspaces.set(canvas,worker);
+
+    const worker_canvas = canvas.transferControlToOffscreen();
 
     worker.postMessage({
         type:'initiate',
         canvas:worker_canvas
     },[worker_canvas])
 
+    worker.postMessage({type:'test'})
+
     // listeners
     worker.onmessage = e => {
-        console.log(e.data);
+        const data = e.data;
+        switch (data.type) {
+            default: 
+                console.warn(`No matching handler for type '${data.type}'`); 
+        }
     }
 
     new ResizeObserver(e => {
@@ -25,8 +32,7 @@ for (let canvas of $$('canvas[workspace]')) {
         worker.postMessage({
             type:'resize_canvas',
             height:canvas.clientHeight,
-            width:canvas.clientWidth
+            width:canvas.clientWidth,
         })
     }).observe(canvas);
 }
-

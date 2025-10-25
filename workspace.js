@@ -23,15 +23,14 @@ function initiate({width,height,dpr}) {
             context.resetTransform();
             context.translate(this.x,this.y);
             context.scale(this.scale * dpr,this.scale * dpr);
-            Object.assign(transform.cache,{
-                x: -transform.x / transform.scale,
-                y: -transform.y / transform.scale,
-                w: canvas.width / transform.scale,
-                h: canvas.height / transform.scale
-            })
-
+            Object.assign(transform.cache,[
+                -transform.x / transform.scale,
+                -transform.y / transform.scale,
+                canvas.width / transform.scale,
+                canvas.height / transform.scale
+            ])
         },
-        cache: {}
+        cache: []
     }
 
     transform = new Proxy(transform,{
@@ -42,6 +41,7 @@ function initiate({width,height,dpr}) {
     })
 
     self.dpr = dpr
+    transform.apply();
 
     mainLoop();
 }
@@ -62,7 +62,7 @@ var [mainLoop,step] = (() => {
     ]
 
     function loop(recursive = true) {
-        context.clearRect(transform.cache.x,transform.cache.y,transform.cache.w,transform.cache.h);
+        context.clearRect(...transform.cache);
         context.strokeStyle = 'black';
         // draw
 

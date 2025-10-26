@@ -20,34 +20,42 @@ export class rect {
     }
 }
 
-// class packager {
-//     constructor() {
-//         console.log(this);
-//     }
-// }
-
-// packager = new Proxy(packager,{
-//     apply(obj,_,args) {
-//         console.log(obj,func,val);
-//     }
-// })
-
 function locker(...params) {
     return class {
         #private = {};
+        static conditionals = {};
         constructor(...args) {
             for (let [index,key] of Object.entries(params)) {
                 this[key] = args[index]
             }
         }
         static { // fuck proxies, this looks cooler
+            for (let [index,key] of Object.entries(params)) {
+                if (key instanceof Array) {
+                    params[index] = key[0];
+                    this.conditionals[key[0]] = key.slice(1);
+                }
+            }
+
             Object.defineProperties(this.prototype, Object.fromEntries(params.map(e => {
                 return [e,{
                     get() {
                         return this.#private[e];
                     },
                     set(val) {
-                        this.#private[e] = val;
+                        const cond = this.constructor.conditionals[e];
+                        if (!cond) {
+                            this.#private[e] = val;
+                            return;
+                        }
+                        for (let i of cond) {
+                            console.log(e,val,i,i(val));
+                            if (i(val)) {
+                                this.#private[e] = val;
+                                return;
+                            }
+                        }
+                        throw Error(`No conditions met for ${e}`)
                     }
                 }]
             })))
@@ -55,27 +63,15 @@ function locker(...params) {
     }
 }
 
-class test extends locker('x','y') {
+locker.define = function() {
+
+}
+
+class test extends locker(['x', (e) => typeof e == 'number'],'y') {
     constructor(x,y) {
         super(x,y);
     }
 }
 
 const a = new test(1,2);
-console.log(a);
-
-// helpers
-
-const mix = (() => {
-    return function(Base, ...classes) { return classes.map(toMixin).reduce((c, mixin) => mixin(c),Base) || Object };
-    function toMixin(target) {
-        if (typeof target != 'function' || !target.prototype) throw TypeError('Expected class while tying to create a mixin');
-        return (Base) => class extends Base {
-            constructor(...args) {
-                super(...args);
-                const instance = new target(...args);
-                Object.assign(this, instance);
-            }
-        }
-    }
-})()
+console.log(test.conditionals);

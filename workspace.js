@@ -1,3 +1,8 @@
+import {objects, rect} from './classes.js';
+
+new rect(50,50,50,50);
+
+
 onmessage = e => {
     const data = e.data
     switch (data.type) {
@@ -6,7 +11,7 @@ onmessage = e => {
         break; case 'resize_canvas':
             resize_canvas(data);
         break; case 'dpi':
-            dpr = data.dpr
+            dpr = data.dpr;
         break; default:
             console.warn(`No matching handler for type '${data.type}'`); 
     }
@@ -14,8 +19,9 @@ onmessage = e => {
 
 function initiate({width,height,dpr}) {
     self.canvas = new OffscreenCanvas(width,height);
-    context = canvas.getContext('2d');
-    transform = {
+    self.context = canvas.getContext('2d',{ willReadFrequently:true });
+
+    self.transform = {
         scale:1,
         x:0,
         y:0,
@@ -46,7 +52,6 @@ function initiate({width,height,dpr}) {
     mainLoop();
 }
 
-
 var [mainLoop,step] = (() => {
     const start = 'loop has already started';
     return [
@@ -64,21 +69,16 @@ var [mainLoop,step] = (() => {
     function loop(recursive = true) {
         context.clearRect(...transform.cache);
         context.strokeStyle = 'black';
+
         // draw
 
-        context.fillStyle='green';
-        context.fillRect(50,50,50,50);
-        context.fillStyle='red';
-        context.fillRect(50,200,100,100);
-
-        context.fillRect(20,600,1000,100);
 
 
-        postMessage({
-            type:'draw',
-            bitmap:canvas.transferToImageBitmap()
-        })
+        for (let i of objects) {
+            i.draw();
+        }
 
+        compareAndPost()
         // loop
         if (recursive)
             requestAnimationFrame(loop);
@@ -90,3 +90,28 @@ function resize_canvas({width,height}) {
     canvas.width = width;
     transform.apply();
 }
+
+const compareAndPost = (() => {
+    let lastData;
+    return function() {
+        const h1 = hash(context.getImageData(0,0,canvas.width,canvas.height).data);
+        const h2 = lastData;
+        lastData = h1;
+        if (h1 !== h2) {
+            postMessage({
+                type:'draw',
+                bitmap:canvas.transferToImageBitmap()
+            })
+        }
+    }
+
+    function hash(data) {
+        let a = 1, b = 0;
+        const MOD = 65521;
+        for (let i = 0; i < data.length; i++) {
+            a = (a + data[i]) % MOD;
+            b = (b + a) % MOD;
+        }
+        return (b << 16) | a;
+    }
+})()

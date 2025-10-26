@@ -4,7 +4,10 @@ const $$ = (selector) => document.querySelectorAll(selector);
 const workspaces = new Map()
 for (let canvas of $$('canvas[workspace]')) {
     // setup
-    const worker = new Worker('workspace.js');
+    const worker = new Worker('./workspace.js',{type:'module'});
+    worker.addEventListener('error', e => {
+        console.error(e);
+    },false);
     workspaces.set(canvas,worker);
 
     const context = canvas.getContext('2d');
@@ -23,7 +26,6 @@ for (let canvas of $$('canvas[workspace]')) {
         switch (data.type) {
             case 'draw':
                 bitmap = data.bitmap;
-                // context.clearRect(0, 0, canvas.width, canvas.height);
                 context.drawImage(data.bitmap,0,0);
             break; default: 
                 console.warn(`No matching handler for type '${data.type}'`); 

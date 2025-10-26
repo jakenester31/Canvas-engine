@@ -20,58 +20,87 @@ export class rect {
     }
 }
 
-function locker(...params) {
-    return class {
-        #private = {};
-        static conditionals = {};
-        constructor(...args) {
-            for (let [index,key] of Object.entries(params)) {
-                this[key] = args[index]
-            }
-        }
-        static { // fuck proxies, this looks cooler
-            for (let [index,key] of Object.entries(params)) {
-                if (key instanceof Array) {
-                    params[index] = key[0];
-                    this.conditionals[key[0]] = key.slice(1);
+const locker = (function(){
+    const storage = {};
+    
+
+    function interpreter(key) {
+        if (typeof key == 'function') return { type: 'function', value:key };
+        if (typeof key != 'string') return { type: 'any', value:key };
+        const value = key.slice(1);
+        if (key[0] == '/') return { type: 'string', value };
+        if (key[0] == '#') return { type: 'type', value };
+        if (key[0] == '@') return { type: 'pfunction', value };
+        return { type: 'string', value:key };
+    }
+    
+    innerlocker.define = function(name,conditionals) {
+        if (!conditionals instanceof Array) conditionals = [conditionals];
+        storage[name] = conditionals;
+        console.log(storage);
+    }
+
+    function innerlocker(...params) {
+        return class {
+            #private = {};
+            static conditionals = {};
+            constructor(...args) {
+                for (let [index,key] of Object.entries(params)) {
+                    this[key] = args[index]
                 }
             }
+            static { // what is this cursed nesting lol
+                for (let [index,key] of Object.entries(params)) {
+                    if (key instanceof Array) {
+                        params[index] = key[0];
+                        this.conditionals[key[0]] = key.slice(1);
+                    }
+                }
 
-            Object.defineProperties(this.prototype, Object.fromEntries(params.map(e => {
-                return [e,{
-                    get() {
-                        return this.#private[e];
-                    },
-                    set(val) {
-                        const cond = this.constructor.conditionals[e];
-                        if (!cond) {
-                            this.#private[e] = val;
-                            return;
-                        }
-                        for (let i of cond) {
-                            console.log(e,val,i,i(val));
-                            if (i(val)) {
-                                this.#private[e] = val;
+                Object.defineProperties(this.prototype, Object.fromEntries(params.map(prop => {
+                    return [prop,{
+                        get() {
+                            return this.#private[prop];
+                        },
+                        set(val) {
+                            const cond = this.constructor.conditionals[prop];
+                            if (!cond) {
+                                this.#private[prop] = val;
                                 return;
                             }
+                            for (let i of cond) {
+                                console.log(interpreter(i))
+                                const {type,value} = interpreter(i);
+                                let valid; 
+                                switch (type) {
+                                    case 'any':
+                                    case 'string': valid = (e => e === value)(val);
+                                    break; case 'type': valid = (e => typeof e === value)(val);
+                                    break; case 'function': valid = value(val);
+                                    break; case 'pfunction': valid = storage[value]?.(val);
+                                }
+                                if (valid) {
+                                    this.#private[prop] = val;
+                                    return;
+                                }
+                            }
+                            // throw Error(`No conditions met for ${prop}`)
+                            console.error(`No conditions met for ${prop}`)
                         }
-                        throw Error(`No conditions met for ${e}`)
-                    }
-                }]
-            })))
+                    }]
+                })))
+            }
         }
-    }
-}
+    } 
+    return innerlocker;
+})()
 
-locker.define = function() {
+locker.define('number',(e) => typeof e == 'number');
 
-}
-
-class test extends locker(['x', (e) => typeof e == 'number'],'y') {
+class test extends locker(['x','@number'],'y') {
     constructor(x,y) {
         super(x,y);
     }
 }
 
-const a = new test(1,2);
-console.log(test.conditionals);
+const a = new test(3,2);

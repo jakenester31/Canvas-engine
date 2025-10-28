@@ -28,19 +28,25 @@ const locker = (function(){
         if (typeof key == 'function') return { type: 'function', value:key };
         if (typeof key != 'string') return { type: 'any', value:key };
         const value = key.slice(1);
-        if (key[0] == '/') return { type: 'string', value };
+        if (key[0] == '/') return { type: 'any', value };
         if (key[0] == '#') return { type: 'type', value };
         if (key[0] == '@') return { type: 'pfunction', value };
-        return { type: 'string', value:key };
+        return { type: 'any', value:key };
     }
     
-    innerlocker.define = function(name,conditionals) {
-        if (!conditionals instanceof Array) conditionals = [conditionals];
+    innerLocker.defineProperty = function(name,conditionals) {
+        if (!(conditionals instanceof Array)) conditionals = [conditionals];
         storage[name] = conditionals;
-        console.log(storage);
     }
 
-    function innerlocker(...params) {
+    innerLocker.defineProperties = function(object) {
+        for (let [name,conditionals] of Object.entries(object)) {
+            innerLocker.defineProperty(name,conditionals);
+        }
+    }
+
+    return innerLocker;
+    function innerLocker(...params) {
         return class {
             #private = {};
             static conditionals = {};
@@ -49,7 +55,7 @@ const locker = (function(){
                     this[key] = args[index]
                 }
             }
-            static { // what is this cursed nesting lol
+            static {
                 for (let [index,key] of Object.entries(params)) {
                     if (key instanceof Array) {
                         params[index] = key[0];
@@ -69,22 +75,38 @@ const locker = (function(){
                                 return;
                             }
                             for (let i of cond) {
-                                console.log(interpreter(i))
                                 const {type,value} = interpreter(i);
                                 let valid; 
-                                switch (type) {
-                                    case 'any':
-                                    case 'string': valid = (e => e === value)(val);
+                                switch (type) { // what is this cursed nesting lol
+                                    case 'any': valid = (e => e === value)(val);
                                     break; case 'type': valid = (e => typeof e === value)(val);
                                     break; case 'function': valid = value(val);
-                                    break; case 'pfunction': valid = storage[value]?.(val);
+                                    break; case 'pfunction': 
+                                    for (let func of storage[value]) {
+                                        if (validate(func(val))) {
+                                            console.log(func(val));
+                                            valid = func(val);
+                                            break;
+                                        }
+
+                                    }
                                 }
-                                if (valid) {
-                                    this.#private[prop] = val;
-                                    return;
+
+                                switch (validate(valid)) {
+                                    case 1: this.#private[prop] = valid?.value; return;
+                                    break; case 2: this.#private[prop] = val; return;
+                                }
+
+                                function validate(object) {
+                                    if (object?.condition && Object.hasOwn(object,'value')) {
+                                        return 1;
+                                    }
+                                    if (object?.condition || ( typeof object?.condition != 'boolean' && object)) {
+                                        return 2;
+                                    }
+                                    return false;
                                 }
                             }
-                            // throw Error(`No conditions met for ${prop}`)
                             console.error(`No conditions met for ${prop}`)
                         }
                     }]
@@ -92,10 +114,13 @@ const locker = (function(){
             }
         }
     } 
-    return innerlocker;
 })()
 
-locker.define('number',(e) => typeof e == 'number');
+// locker.defineProperty( 'number', e => ({condition:isFinite(Number(e)), value: Number(e)}) );
+
+locker.defineProperties({
+    number: e => ({condition:isFinite(Number(e)), value: Number(e)}),
+})
 
 class test extends locker(['x','@number'],'y') {
     constructor(x,y) {
@@ -103,4 +128,14 @@ class test extends locker(['x','@number'],'y') {
     }
 }
 
-const a = new test(3,2);
+const a = new test('123',2);
+
+console.log(a);
+
+{
+    x: [
+        {type:'class', value: Number},
+        {type:'not', value: Infinity},
+        {type:'not', value: -Infinity}
+    ]
+}

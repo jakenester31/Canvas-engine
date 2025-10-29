@@ -80,28 +80,58 @@ const locker = (function(){
 // }
 
 function mod(a,b) { return ((a % b) + b) % b }
+function isInt(a) {return isFinite(a) && Math.round(a) === +a }
+
+const safeIterator = (function(){
+    function remove(start,count) {
+        if (!isInt(start)) throw TypeError(`start must be an integer`);
+        start = mod(start,this.indexes.length);
+        this.storage.push({type:'delete',start,count}); 
+        this.indexes.slice(start,+start + count).forEach(e => this.deleted.add(e))
+
+    }
+    function insert(start,...items) { this.storage.push({type:'add',start,items}); }
+
+    function applyAll(logs) {
+        console.log(logs)
+        switch (logs[0]) {
+            case 'delete':
+
+            break; default:
+            throw Miss
+        }
+    }
+
+    return function(target,func) {
+        const c = {
+            storage:[],
+            indexes:Object.keys(target).filter(e => e >= 0 && isInt(e) ).map( e => +e ),
+            deleted: new Set()
+        }
+        _remove = remove.bind(c),
+        _insert = insert.bind(c);
+        for (let key in target) {
+            if (isInt(key)) key = +key;
+            if (c.deleted.has(key)) {
+                console.log('SKIPPED',key);
+                continue
+            }
+            func({target,key,remove:_remove,insert:_insert});
+        }
+        applyAll(c.storage);
+    }
+}())
 
 
 const a = [1,2,3,4];
 a.x = 'yz';
 
-safeIterator(a,({target,key}) => {
-    console.log(target[key]);
+safeIterator(a,({target,key,remove}) => {
+    console.log('ITER',key,target[key]);
+    try {
+        remove(key,2);
+    } catch {}
+    console.log();
 })
 
-const safeIterator = (function(){
-    function remove(start,count) {
-
-    }
-
-    function insert(start,...items) {
-
-    }
-
-    return function(target,func) {
-        const cache = [];
-        for (let key in target) {
-            func({target,key,remove,insert})
-        }
-    }
-}())
+console.log(a)

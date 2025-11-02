@@ -5,101 +5,64 @@ const locker = (function(){
     }
 }())
 
-// const a = ['a','b','c','d'];
-// // a.x = 'yz';
-// console.log('INPUT >> ',a,'\n');
-
-// safeIterator(a, ({target,index,key,keys}) => {
-//     console.log('AT',key,`(${index}) >>`,target[key]);
-//     // target.splice(index,1);
-//     target.splice(key,0,NaN,NaN)
-//     console.log();
-// })
-
-// console.log('RESULT >>',a);
-
-// function safeIterator(target,func) {
-//     if (typeof func != 'function') throw TypeError(`Parameter func must be a function`);
-//     if (Object.hasOwn(target,'splice')) {
-//         var splice = target.splice
-//         console.warn("Temporary overwriting targets splice function. Don't worry, it'll come back after safeIterator finishes");
-//     }
-//     const innerSplice = Array.prototype.splice.bind(target);
-//     const FILLER = [];
-//     if (true)
-//         Object.defineProperty(target,'splice',{
-//             value(start,deleteCount,...items) {
-//                 // js similarity compat
-//                 if (+start != start) start = 0;
-//                 if (!isFinite(start)) return; //silent death
-//                 // key vs index compat
-//                 const temp = {}
-//                 temp.indexes = keys.filter(e => e >= 0 && Math.round(e) == e )
-//                 temp.keys = keys.filter(e => !temp.indexes.includes(e) )
-
-//                 // general
-//                 originalStart = start;
-//                 start = mod(start, temp.indexes.length) || 0;
-                
-//                 // delete compat
-//                 index += Math.min(0,Math.max(start - index - 1,-deleteCount,-temp.indexes.length));
-//                 temp.indexes.splice(temp.indexes.length - deleteCount, deleteCount);
-
-//                 // add compat
-//                 const offset = Math.max(0,Math.min(start - index + items.length - 0));
-//                 index += offset;
-
-//                 temp.indexes.splice(start,items.length,...Array(items.length).fill(FILLER));
-//                 for (let i in items) temp.indexes.push(String(+temp.indexes.length + 1));
-
-
-//                 // debug
-//                 console.log('SPLICE',start,deleteCount,items)
-//                 console.log('KEYS',temp.indexes);
-
-//                 // splice
-//                 keys = [].concat(...Object.values(temp));
-//                 innerSplice(start,deleteCount,...items);
-
-
-//                 console.log('OBJECT', target);
-
-//             }
-//         })
-
-//     var lock = 0;
-//     var keys = Object.keys(target)
-//     for (var index = 0, key = keys[index]; index < keys.length; index++, key = keys[index]) {
-//         // if (key === FILLER) continue;
-//         if (Math.round(key) === key) key = +key;
-//         func({target,index,key,keys})
-//         lock++;
-//         if (lock > 5)
-//             break;
-//     }
-// }
-
 function mod(a,b) { return ((a % b) + b) % b }
-function isInt(a) {return isFinite(a) && Math.round(a) === +a }
+function isInt(a) { return isFinite(a) && Math.round(a) === +a }
+function replace(target,replacer) {
+    if (target instanceof Array) target.length = 0;
+    for (let key in target){ delete target[key] }
+    for (let key in replacer) { target[key] = replacer[key] }
+}
+function toAndFromEntries(target,func,callback) { return Object.fromEntries(func.bind(Object.entries(target))(callback)) }
+
 
 const safeIterator = (function(){
     function remove(start,count) {
+        if (!count) {
+            this.storage.push({type:'delete',start}); 
+            return;
+        }
         if (!isInt(start)) throw TypeError(`start must be an integer`);
         start = mod(start,this.indexes.length);
         this.storage.push({type:'delete',start,count}); 
         this.indexes.slice(start,+start + count).forEach(e => this.deleted.add(e))
-
     }
-    function insert(start,...items) { this.storage.push({type:'add',start,items}); }
 
-    function applyAll(logs) {
-        console.log(logs)
-        switch (logs[0]) {
-            case 'delete':
+    function insert(start,...items) { this.storage.push({type:'insert',start,items}); }
 
-            break; default:
-            throw Miss
+    function applyAll(target,logs) {
+        const FILLER = [];
+        const ordered = {};
+        for (let log of logs) {
+            switch (log.type) {
+                case 'delete':
+                    if (log.count)
+                        target.splice(log.start,log.count,...Array(log.count).fill(FILLER));
+                    else delete target[log.start];
+                break; case 'insert':
+                    if (!ordered[log.start])
+                        ordered[log.start] = [];
+                    ordered[log.start].unshift(log)
+                break; default:
+                throw Error(`No matching types for ${log.type}`);
+            }
         }
+
+        const keys = Object.keys(ordered);
+        for (let i = keys.length; i > 0; i--) {
+            let logs = ordered[keys.pop()]
+            for (let log of logs) {
+                console.log(log)
+                target.splice(log.start,0,...log.items);
+            }
+        }
+
+        // console.log('ordered',ordered)
+
+
+        const replacer = [];
+        if (target instanceof Array) Object.assign(replacer,target.filter(e => e !== FILLER));
+        Object.assign(replacer,Object.fromEntries( Object.entries(target).filter(e => !isInt(e[0])) ));
+        replace(target,replacer);
     }
 
     return function(target,func) {
@@ -112,26 +75,24 @@ const safeIterator = (function(){
         _insert = insert.bind(c);
         for (let key in target) {
             if (isInt(key)) key = +key;
-            if (c.deleted.has(key)) {
-                console.log('SKIPPED',key);
-                continue
-            }
+            if (c.deleted.has(key)) continue;
             func({target,key,remove:_remove,insert:_insert});
         }
-        applyAll(c.storage);
+        applyAll(target,c.storage);
     }
 }())
 
-
+// const a = {a:1,b:2,c:3,d:4};
 const a = [1,2,3,4];
 a.x = 'yz';
 
-safeIterator(a,({target,key,remove}) => {
+safeIterator(a,({target,key,remove,insert}) => {
     console.log('ITER',key,target[key]);
-    try {
-        remove(key,2);
-    } catch {}
-    console.log();
+    if (target[key] % 2 == 0) {
+        // remove(key);
+        insert(key,'inserted');
+        insert(key,'in2');
+    }
 })
 
-console.log(a)
+console.log(a);

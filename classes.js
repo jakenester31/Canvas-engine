@@ -1,141 +1,121 @@
-// exports
-export const objects = [];
+class Validator {
+    constructor(map) {
+        for (let i in map) {
+            const e = map[i];
+            if (typeof e.validate != 'function') {
+                e.validate = () => false;
+                if (typeof e.set == 'function')
+                    e.validate = () => true;
+            }
+            if (typeof e.set != 'function')
+                e.set = (val) => val;
+            if (typeof e.get != 'function')
+                e.get = (val) => val;
+        }
 
-export class rect {
-    #private = {};
-    constructor(x,y,w,h) {
-        Object.assign(this.#private,{x,y,w,h});
-        objects.push(this);
-    }
-
-    get x() { return this.#private.x }
-    draw() {
-        context.fillRect(this.#private.x,this.#private.y,this.#private.w,this.#private.h);
-    }
-
-    static {
-        Object.assign(this,{
-
+        return new Proxy(this,{
+            set(obj,prop,val) {
+                const check = map[prop];
+                if (!check?.validate(val)) return;
+                return Reflect.set(obj,prop,check.set(val));
+            },
+            get(obj,prop) {
+                // console.log(prop);
+                const check = map[prop];
+                const real = Reflect.get(obj,prop);
+                return check ? check.get(real) : real;
+            }
         })
     }
 }
 
-const locker = (function(){
-    const storage = {};
-    
+// const a = new Validator({
+//     test:{
+//         validate(val) { return true }
+//     }
+// })
 
-    function interpreter(key) {
-        if (typeof key == 'function') return { type: 'function', value:key };
-        if (typeof key != 'string') return { type: 'any', value:key };
-        const value = key.slice(1);
-        if (key[0] == '/') return { type: 'any', value };
-        if (key[0] == '#') return { type: 'type', value };
-        if (key[0] == '@') return { type: 'pfunction', value };
-        return { type: 'any', value:key };
-    }
-    
-    innerLocker.defineProperty = function(name,conditionals) {
-        if (!(conditionals instanceof Array)) conditionals = [conditionals];
-        storage[name] = conditionals;
-    }
+// a.test = {a:{b:1}};
+// console.log(a.test.a.b)
 
-    innerLocker.defineProperties = function(object) {
-        for (let [name,conditionals] of Object.entries(object)) {
-            innerLocker.defineProperty(name,conditionals);
+// abstract
+class Base {
+    static instances = [];
+    constructor(map) {
+        // super(map)
+        Base.instances.push(this);
+    }
+    draw() { context.fillText('ERR',this?.x,this?.y) }
+} export const objects = Base.instances;
+
+class Node extends Base {
+    fill = {
+        style:'fill', // fill (drawn), null (not drawn), clear (erase)
+        color:'black' // any color name, hex, rgb, or hsl
+    }
+    border = {
+        style:'fill',
+        color:'black',
+        width:0 // type Number
+    }
+    position = Object.assign(new Vector(0,0),{
+        origin:'absolute', // absolute (relative to (0,0)), object (relative to specified object)
+    })
+
+    constructor(x,y,map) {
+        super(map);
+        this.position.x = x;
+        this.position.y = y;
+    }
+}
+
+// simple
+class Vector extends Validator {
+    static #valid = {
+        validate(val) { return isFinite(val) && val != null },
+        set(val) { return +val }
+    }
+    static #rules = {
+        x: Vector.#valid,
+        y: Vector.#valid,
+        origin: {
+            validate(val) { return val == 'absolute' || val instanceof Node }
         }
     }
-
-    return innerLocker;
-    function innerLocker(...params) {
-        return class {
-            #private = {};
-            static conditionals = {};
-            constructor(...args) {
-                for (let [index,key] of Object.entries(params)) {
-                    this[key] = args[index]
-                }
-            }
-            static {
-                for (let [index,key] of Object.entries(params)) {
-                    if (key instanceof Array) {
-                        params[index] = key[0];
-                        this.conditionals[key[0]] = key.slice(1);
-                    }
-                }
-
-                Object.defineProperties(this.prototype, Object.fromEntries(params.map(prop => {
-                    return [prop,{
-                        get() {
-                            return this.#private[prop];
-                        },
-                        set(val) {
-                            const cond = this.constructor.conditionals[prop];
-                            if (!cond) {
-                                this.#private[prop] = val;
-                                return;
-                            }
-                            for (let i of cond) {
-                                const {type,value} = interpreter(i);
-                                let valid; 
-                                switch (type) { // what is this cursed nesting lol
-                                    case 'any': valid = (e => e === value)(val);
-                                    break; case 'type': valid = (e => typeof e === value)(val);
-                                    break; case 'function': valid = value(val);
-                                    break; case 'pfunction': 
-                                    for (let func of storage[value]) {
-                                        if (validate(func(val))) {
-                                            console.log(func(val));
-                                            valid = func(val);
-                                            break;
-                                        }
-
-                                    }
-                                }
-
-                                switch (validate(valid)) {
-                                    case 1: this.#private[prop] = valid?.value; return;
-                                    break; case 2: this.#private[prop] = val; return;
-                                }
-
-                                function validate(object) {
-                                    if (object?.condition && Object.hasOwn(object,'value')) {
-                                        return 1;
-                                    }
-                                    if (object?.condition || ( typeof object?.condition != 'boolean' && object)) {
-                                        return 2;
-                                    }
-                                    return false;
-                                }
-                            }
-                            console.error(`No conditions met for ${prop}`)
-                        }
-                    }]
-                })))
-            }
-        }
-    } 
-})()
-
-// locker.defineProperty( 'number', e => ({condition:isFinite(Number(e)), value: Number(e)}) );
-
-locker.defineProperties({
-    number: e => ({condition:isFinite(Number(e)), value: Number(e)}),
-})
-
-class test extends locker(['x','@number'],'y') {
     constructor(x,y) {
-        super(x,y);
+        super(Vector.#rules);
+        Object.assign(this,{x,y});
     }
 }
 
-const a = new test('123',2);
+// const a = new Node(0,0);
 
-console.log(a);
-
-{
-    x: [
-        {type:'class', value: Number},
-        {type:'not', value: Infinity},
-        {type:'not', value: -Infinity}
-    ]
+// drawn
+export class Rect extends Node {
+    constructor(x,y,w,h) {
+        super(x,y);
+        Object.assign(this,{
+            dimensions: {
+                width:w, // type Number
+                height:h // type Number
+            }
+        })
+    }
+    draw() {
+        context.fillRect(this.position.x,this.position.y,this.dimensions.width,this.dimensions.height);
+    }
 }
+
+const a = new Rect(1,2,3,4);
+// console.log(a)
+
+
+// function interpreter(key) {
+//     if (typeof key == 'function') return { type: 'function', value:key };
+//     if (typeof key != 'string') return { type: 'any', value:key };
+//     const value = key.slice(1);
+//     if (key[0] == '/') return { type: 'any', value };
+//     if (key[0] == '#') return { type: 'type', value };
+//     if (key[0] == '@') return { type: 'pfunction', value };
+//     return { type: 'any', value:key };
+// }

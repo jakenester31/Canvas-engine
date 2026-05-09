@@ -9,7 +9,6 @@ for (let canvas of $$('canvas[workspace]')) {
         console.error(e);
     },false);
     workspaces.set(canvas,worker);
-
     const context = canvas.getContext('2d');
 
     worker.postMessage({
@@ -27,7 +26,8 @@ for (let canvas of $$('canvas[workspace]')) {
             case 'draw':
                 bitmap = data.bitmap;
                 context.drawImage(data.bitmap,0,0);
-            break; default: 
+            break; 
+            default: 
                 console.warn(`No matching handler for type '${data.type}'`); 
         }
     }
@@ -38,8 +38,7 @@ for (let canvas of $$('canvas[workspace]')) {
 
         canvas.height = Math.ceil(canvas.clientHeight * devicePixelRatio);
         canvas.width = Math.ceil(canvas.clientWidth * devicePixelRatio);
-        if (bitmap)
-            context.drawImage(bitmap,0,0);
+        if (bitmap) context.drawImage(bitmap,0,0);
 
         worker.postMessage({
             type:'resize_canvas',
@@ -48,14 +47,10 @@ for (let canvas of $$('canvas[workspace]')) {
         })
     }).observe(canvas);
 
-    matchMedia(`(resolution: ${devicePixelRatio}dppx)`).addEventListener('change', _ => {
+    matchMedia(`(resolution: ${devicePixelRatio}dppx)`).addEventListener('change', () => {
         worker.postMessage({
-            type:'dpi',
+            type:'dpr',
             dpr:devicePixelRatio
         })
     })
-
-
 }
-
-// 1:03

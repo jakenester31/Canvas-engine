@@ -1,7 +1,6 @@
-import {objects, rect} from './classes.js';
+import {objects, Rect} from './classes.js';
 
-new rect(50,50,50,50);
-
+// new Rect(50,50,50,50);
 
 onmessage = e => {
     const data = e.data
@@ -10,7 +9,7 @@ onmessage = e => {
             initiate(data)
         break; case 'resize_canvas':
             resize_canvas(data);
-        break; case 'dpi':
+        break; case 'dpr':
             dpr = data.dpr;
         break; default:
             console.warn(`No matching handler for type '${data.type}'`); 
@@ -45,14 +44,12 @@ function initiate({width,height,dpr}) {
             obj.apply();
         }
     })
-
     self.dpr = dpr
     transform.apply();
-
     mainLoop();
 }
 
-var [mainLoop,step] = (() => {
+let [mainLoop,step] = (() => {
     const start = 'loop has already started';
     return [
         function() {
@@ -71,17 +68,13 @@ var [mainLoop,step] = (() => {
         context.strokeStyle = 'black';
 
         // draw
-
-
-
         for (let i of objects) {
-            i.draw();
+            i?.draw();
         }
 
         compareAndPost()
         // loop
-        if (recursive)
-            requestAnimationFrame(loop);
+        if (recursive) requestAnimationFrame(loop);
     }
 })();
 
@@ -95,9 +88,8 @@ const compareAndPost = (() => {
     let lastData;
     return function() {
         const h1 = hash(context.getImageData(0,0,canvas.width,canvas.height).data);
-        const h2 = lastData;
-        lastData = h1;
-        if (h1 !== h2) {
+        if (h1 !== lastData) {
+            lastData = h1;
             postMessage({
                 type:'draw',
                 bitmap:canvas.transferToImageBitmap()
